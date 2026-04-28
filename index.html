@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BRAND DETECTOR — NIKE vs ADIDAS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    /*──────────────────────────────────────────
+      TOKENS
+    ──────────────────────────────────────────*/
+    :root{
+      --bg:#04050a;
+      --surface:#0b0d14;
+      --surface2:#10121c;
+      --border:rgba(255,255,255,.06);
+      --nike:#e8ff3b;
+      --adidas:#3bffd8;
+      --white:#f0f0f0;
+      --muted:#4e5468;
+      --r:14px;
+      --ease:.38s cubic-bezier(.4,0,.2,1);
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;scroll-behavior:smooth}
+    body{
+      background:var(--bg);
+      color:var(--white);
+      font-family:'Syne',sans-serif;
+      font-size:15px;
+      overflow-x:hidden;
+    }
+
+    /*──── noise texture overlay ────*/
+    body::after{
+      content:'';position:fixed;inset:0;z-index:0;
+      background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events:none;opacity:.5;
+    }
+
+    /*──── animated background blobs ────*/
+    .blob{
+      position:fixed;border-radius:50%;filter:blur(130px);
+      pointer-events:none;z-index:0;
+    }
+    .blob-1{width:600px;height:600px;top:-200px;left:-150px;
+      background:radial-gradient(circle,rgba(232,255,59,.18),transparent 70%);
+      animation:blobFloat 16s ease-in-out infinite alternate;}
+    .blob-2{width:500px;height:500px;bottom:-100px;right:-100px;
+      background:radial-gradient(circle,rgba(59,255,216,.15),transparent 70%);
+      animation:blobFloat 20s ease-in-out infinite alternate-reverse;}
+    .blob-3{width:300px;height:300px;top:50%;left:50%;transform:translate(-50%,-50%);
+      background:radial-gradient(circle,rgba(255,255,255,.04),transparent 70%);
+      animation:blobFloat 12s ease-in-out infinite alternate;}
+    @keyframes blobFloat{
+      0%{transform:translate(0,0) scale(1);}
+      100%{transform:translate(40px,30px) scale(1.12);}
+    }
+
+    /*──── scan line grid ────*/
+    .grid{
+      position:fixed;inset:0;z-index:0;pointer-events:none;
+      background-image:
+        linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+      background-size:50px 50px;
+    }
+
+    /*──────────────────────────────────────────
+      LAYOUT
+    ──────────────────────────────────────────*/
+    .page{
+      position:relative;z-index:1;
+      min-height:100vh;
+      display:flex;flex-direction:column;align-items:center;
+      padding:56px 20px 90px;
+      gap:44px;
+    }
+
+    /*──────────────────────────────────────────
+      HEADER
+    ──────────────────────────────────────────*/
+    .header{text-align:center;animation:fadeUp .8s ease both;}
+    .eyebrow{
+      font-size:.7rem;letter-spacing:.3em;text-transform:uppercase;
+      color:var(--muted);margin-bottom:14px;
+    }
+    .logo-row{
+      display:flex;align-items:center;justify-content:center;gap:0;
+      line-height:1;
+    }
+    .logo-nike{
+      font-family:'Bebas Neue',sans-serif;
+      font-size:clamp(4rem,12vw,8rem);
+      color:var(--nike);
+      text-shadow:0 0 60px rgba(232,255,59,.35);
+      letter-spacing:-.02em;
+    }
+    .logo-slash{
+      font-family:'Bebas Neue',sans-serif;
+      font-size:clamp(2rem,6vw,4rem);
+      color:var(--muted);
+      padding:0 16px;
+      align-self:center;
+    }
+    .logo-adidas{
+      font-family:'Bebas Neue',sans-serif;
+      font-size:clamp(4rem,12vw,8rem);
+      color:var(--adidas);
+      text-shadow:0 0 60px rgba(59,255,216,.3);
+      letter-spacing:-.02em;
+    }
+    .subtitle{
+      margin-top:12px;font-size:.85rem;font-weight:400;
+      color:var(--muted);letter-spacing:.05em;
+    }
+
+    /*──────────────────────────────────────────
+      UPLOAD CARD
+    ──────────────────────────────────────────*/
+    .card{
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:var(--r);
+      width:100%;max-width:580px;
+      overflow:hidden;
+      animation:fadeUp .8s .15s ease both;
+    }
+
+    /*── progress bar (top of card) ──*/
+    .progress{height:3px;background:transparent;position:relative;overflow:hidden;}
+    .progress-fill{
+      height:100%;width:0;
+      background:linear-gradient(90deg,var(--nike),var(--adidas));
+      border-radius:99px;
+      display:none;
+    }
+    .progress-fill.running{
+      display:block;
+      animation:scanBar 1.4s ease-in-out infinite;
+    }
+    @keyframes scanBar{
+      0%  {width:0%;left:0}
+      50% {width:70%;left:15%}
+      100%{width:0%;left:100%}
+    }
+
+    /*── drop zone ──*/
+    .drop{
+      padding:56px 36px;
+      display:flex;flex-direction:column;align-items:center;gap:18px;
+      cursor:pointer;
+      transition:background var(--ease);
+      user-select:none;
+    }
+    .drop:hover,.drop.over{background:rgba(255,255,255,.025);}
+    .drop.over{outline:2px dashed var(--nike);outline-offset:-2px;}
+
+    .drop-ring{
+      width:72px;height:72px;border-radius:50%;
+      border:1.5px solid var(--border);
+      display:flex;align-items:center;justify-content:center;
+      font-size:2rem;
+      transition:border-color var(--ease),box-shadow var(--ease),transform var(--ease);
+    }
+    .drop:hover .drop-ring{
+      border-color:var(--nike);
+      box-shadow:0 0 30px rgba(232,255,59,.2);
+      transform:scale(1.08);
+    }
+    .drop-title{font-size:1.05rem;font-weight:700;}
+    .drop-hint{font-size:.78rem;color:var(--muted);text-align:center;}
+    #file-input{display:none;}
+
+    /*── image preview ──*/
+    .preview{
+      display:none;padding:0 32px 24px;
+      flex-direction:column;align-items:center;gap:12px;
+    }
+    .preview.show{display:flex;}
+    .preview-img{
+      width:100%;max-height:300px;object-fit:contain;
+      border-radius:10px;border:1px solid var(--border);
+      background:#000;
+    }
+    .preview-name{font-size:.75rem;color:var(--muted);word-break:break-all;text-align:center;}
+
+    /*── analyse button ──*/
+    .btn-go{
+      display:none;
+      margin:0 32px 32px;
+      padding:16px;width:calc(100% - 64px);
+      font-family:'Bebas Neue',sans-serif;
+      font-size:1.35rem;letter-spacing:.15em;text-transform:uppercase;
+      color:#000;background:var(--nike);
+      border:none;border-radius:10px;cursor:pointer;
+      position:relative;overflow:hidden;
+      transition:background var(--ease),transform .15s,box-shadow var(--ease);
+    }
+    .btn-go.show{display:block;}
+    .btn-go::after{
+      content:'';position:absolute;inset:0;
+      background:linear-gradient(120deg,transparent 30%,rgba(255,255,255,.25) 50%,transparent 70%);
+      transform:translateX(-100%);
+      transition:transform .55s ease;
+    }
+    .btn-go:hover{background:#fff;box-shadow:0 0 40px rgba(232,255,59,.4);}
+    .btn-go:hover::after{transform:translateX(200%);}
+    .btn-go:active{transform:scale(.98);}
+    .btn-go:disabled{opacity:.5;cursor:not-allowed;}
+
+    /*── scanning state ──*/
+    .scanning-msg{
+      display:none;padding:18px 32px;
+      font-size:.8rem;color:var(--muted);
+      text-align:center;letter-spacing:.08em;
+    }
+    .scanning-msg.show{display:block;}
+
+    /*──────────────────────────────────────────
+      RESULT PANEL
+    ──────────────────────────────────────────*/
+    #result{
+      width:100%;max-width:580px;
+      opacity:0;transform:translateY(40px);
+      transition:opacity .55s ease,transform .55s ease;
+      pointer-events:none;
+    }
+    #result.show{opacity:1;transform:translateY(0);pointer-events:auto;}
+
+    .res-card{
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:var(--r);
+      overflow:hidden;
+    }
+
+    /*── verdict banner ──*/
+    .verdict{
+      padding:36px 32px;
+      display:flex;align-items:center;gap:28px;
+      position:relative;overflow:hidden;
+    }
+    .verdict::before{
+      content:'';position:absolute;inset:0;
+      opacity:.08;
+      transition:background .5s ease;
+    }
+    .verdict.nike::before  {background:var(--nike);}
+    .verdict.adidas::before{background:var(--adidas);}
+
+    .v-logo{
+      font-family:'Bebas Neue',sans-serif;
+      font-size:5rem;line-height:1;
+      position:relative;z-index:1;
+      filter:drop-shadow(0 0 24px currentColor);
+      transition:color .4s ease;
+    }
+    .verdict.nike   .v-logo{color:var(--nike);}
+    .verdict.adidas .v-logo{color:var(--adidas);}
+
+    .v-info{position:relative;z-index:1;}
+    .v-tag{font-size:.7rem;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;margin-bottom:2px;}
+    .v-brand{
+      font-family:'Bebas Neue',sans-serif;
+      font-size:3.8rem;line-height:1;letter-spacing:.04em;
+    }
+    .verdict.nike   .v-brand{color:var(--nike);}
+    .verdict.adidas .v-brand{color:var(--adidas);}
+
+    /*── confidence ──*/
+    .conf-block{padding:24px 32px 20px;border-top:1px solid var(--border);}
+    .conf-row{
+      display:flex;justify-content:space-between;align-items:baseline;
+      margin-bottom:12px;
+    }
+    .conf-label{font-size:.72rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;}
+    .conf-pct{
+      font-family:'Bebas Neue',sans-serif;font-size:2.2rem;
+      transition:color .4s;
+    }
+    .conf-pct.nike  {color:var(--nike);}
+    .conf-pct.adidas{color:var(--adidas);}
+
+    .bar-bg{height:10px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;}
+    .bar-fg{
+      height:100%;width:0;border-radius:99px;
+      transition:width 1.3s cubic-bezier(.4,0,.2,1) .25s;
+    }
+    .bar-fg.nike  {background:linear-gradient(90deg,var(--nike),#fffb80);}
+    .bar-fg.adidas{background:linear-gradient(90deg,var(--adidas),#80fff5);}
+
+    /*── split scores ──*/
+    .scores{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px 32px 24px;}
+    .score-box{
+      background:var(--surface2);
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:16px 18px;
+      transition:border-color var(--ease);
+    }
+    .score-box.active-nike  {border-color:rgba(232,255,59,.3);}
+    .score-box.active-adidas{border-color:rgba(59,255,216,.3);}
+    .sc-label{font-size:.7rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-bottom:4px;}
+    .sc-val{font-family:'Bebas Neue',sans-serif;font-size:2rem;}
+    .sc-val.nike  {color:var(--nike);}
+    .sc-val.adidas{color:var(--adidas);}
+
+    /*── uploaded image preview in result ──*/
+    .res-img-wrap{padding:0 32px 8px;}
+    .res-img{
+      width:100%;max-height:220px;object-fit:contain;
+      border-radius:10px;border:1px solid var(--border);background:#000;
+    }
+
+    /*── unrelated state ──*/
+    .verdict.unrelated::before{background:#ff6b35;}
+    .verdict.unrelated .v-logo{color:#ff6b35;animation:shake .5s ease both;}
+    .verdict.unrelated .v-brand{color:#ff6b35;}
+
+    .unrelated-banner{
+      display:none;
+      margin:0 32px 20px;
+      padding:18px 20px;
+      background:rgba(255,107,53,.07);
+      border:1px solid rgba(255,107,53,.25);
+      border-radius:10px;
+      gap:14px;
+      align-items:flex-start;
+    }
+    .unrelated-banner.show{display:flex;}
+    .unrelated-icon{font-size:1.6rem;flex-shrink:0;line-height:1.2;}
+    .unrelated-text{}
+    .unrelated-title{
+      font-weight:700;font-size:.9rem;
+      color:#ff8f65;margin-bottom:4px;letter-spacing:.02em;
+    }
+    .unrelated-desc{
+      font-size:.78rem;color:var(--muted);line-height:1.5;
+    }
+
+    .bar-fg.unrelated{background:linear-gradient(90deg,#ff6b35,#ffad8f);}
+    .conf-pct.unrelated{color:#ff6b35;}
+
+    @keyframes shake{
+      0%,100%{transform:translateX(0);}
+      20%{transform:translateX(-6px);}
+      40%{transform:translateX(6px);}
+      60%{transform:translateX(-4px);}
+      80%{transform:translateX(4px);}
+    }
+
+    /*── reset ──*/
+    .btn-reset{
+      margin:0 32px 28px;padding:12px;width:calc(100% - 64px);
+      background:transparent;border:1px solid var(--border);border-radius:10px;
+      color:var(--muted);font-family:'Syne',sans-serif;font-size:.85rem;
+      cursor:pointer;letter-spacing:.04em;
+      transition:border-color var(--ease),color var(--ease);
+    }
+    .btn-reset:hover{border-color:var(--white);color:var(--white);}
+
+    /*──────────────────────────────────────────
+      TOAST
+    ──────────────────────────────────────────*/
+    #toast{
+      position:fixed;bottom:28px;left:50%;
+      transform:translateX(-50%) translateY(130%);
+      background:#1a0808;border:1px solid rgba(255,80,80,.3);
+      color:#ff7070;border-radius:10px;
+      padding:12px 24px;font-size:.82rem;max-width:90vw;
+      text-align:center;z-index:999;
+      transition:transform .4s cubic-bezier(.4,0,.2,1);
+    }
+    #toast.show{transform:translateX(-50%) translateY(0);}
+
+    /*──────────────────────────────────────────
+      FOOTER
+    ──────────────────────────────────────────*/
+    footer{font-size:.72rem;color:var(--muted);letter-spacing:.04em;}
+
+    /*──────────────────────────────────────────
+      ANIMATIONS
+    ──────────────────────────────────────────*/
+    @keyframes fadeUp{
+      from{opacity:0;transform:translateY(28px);}
+      to  {opacity:1;transform:translateY(0);}
+    }
+
+    /*── responsive ──*/
+    @media(max-width:480px){
+      .drop{padding:40px 24px;}
+      .btn-go,.btn-reset{margin-left:20px;margin-right:20px;width:calc(100% - 40px);}
+      .scores{padding:16px 20px 24px;}
+      .conf-block{padding:20px 20px 16px;}
+      .verdict{padding:28px 20px;}
+      .res-img-wrap{padding:0 20px 8px;}
+    }
+  </style>
+</head>
+<body>
+
+<!-- background layers -->
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<div class="blob blob-3"></div>
+<div class="grid"></div>
+
+<div class="page">
+
+  <!-- HEADER -->
+  <header class="header">
+    <p class="eyebrow">AI-Powered Brand Recognition · CNN Classifier</p>
+    <div class="logo-row">
+      <span class="logo-nike">Nike</span>
+      <span class="logo-slash">/</span>
+      <span class="logo-adidas">Adidas</span>
+    </div>
+    <p class="subtitle">Upload a logo or product image — get an instant AI prediction</p>
+  </header>
+
+  <!-- UPLOAD CARD -->
+  <div class="card" id="upload-card">
+    <div class="progress"><div class="progress-fill" id="progress-fill"></div></div>
+
+    <!-- Drop zone -->
+    <div class="drop" id="drop-zone">
+      <div class="drop-ring" id="drop-ring">📂</div>
+      <span class="drop-title">Drop your image here</span>
+      <span class="drop-hint">or click to browse &nbsp;·&nbsp; PNG · JPG · WEBP · BMP &nbsp;·&nbsp; max 8 MB</span>
+      <input type="file" id="file-input" accept="image/*"/>
+    </div>
+
+    <!-- Preview -->
+    <div class="preview" id="preview-wrap">
+      <img id="preview-img" class="preview-img" src="" alt="Preview"/>
+      <span class="preview-name" id="preview-name"></span>
+    </div>
+
+    <p class="scanning-msg" id="scanning-msg">🔍&nbsp; Running image through CNN model…</p>
+
+    <button class="btn-go" id="btn-go" type="button">Detect Brand</button>
+  </div>
+
+  <!-- RESULT PANEL -->
+  <div id="result">
+    <div class="res-card">
+
+      <!-- verdict -->
+      <div class="verdict" id="verdict">
+        <div class="v-logo" id="v-logo">?</div>
+        <div class="v-info">
+          <p class="v-tag">Detected Brand</p>
+          <p class="v-brand" id="v-brand">—</p>
+        </div>
+      </div>
+
+      <!-- unrelated image warning -->
+      <div class="unrelated-banner" id="unrelated-banner">
+        <div class="unrelated-icon">⚠️</div>
+        <div class="unrelated-text">
+          <p class="unrelated-title">Image Not Recognized as Nike or Adidas</p>
+          <p class="unrelated-desc">This image doesn't appear to be a Nike or Adidas shoe/logo. The model only works with sneaker or brand logo images. Please upload a relevant image for an accurate result.</p>
+        </div>
+      </div>
+
+      <!-- uploaded image -->
+      <div class="res-img-wrap" id="res-img-wrap" style="display:none">
+        <img id="res-img" class="res-img" src="" alt="Uploaded"/>
+      </div>
+
+      <!-- confidence bar -->
+      <div class="conf-block">
+        <div class="conf-row">
+          <span class="conf-label">Confidence</span>
+          <span class="conf-pct" id="conf-pct">0%</span>
+        </div>
+        <div class="bar-bg">
+          <div class="bar-fg" id="bar-fg"></div>
+        </div>
+      </div>
+
+      <!-- split scores -->
+      <div class="scores">
+        <div class="score-box" id="box-nike">
+          <p class="sc-label">Nike</p>
+          <p class="sc-val nike" id="nike-val">—</p>
+        </div>
+        <div class="score-box" id="box-adidas">
+          <p class="sc-label">Adidas</p>
+          <p class="sc-val adidas" id="adidas-val">—</p>
+        </div>
+      </div>
+
+      <button class="btn-reset" id="btn-reset" type="button">← Try another image</button>
+    </div>
+  </div>
+
+  <footer>Built with TensorFlow &amp; Flask &nbsp;·&nbsp; CNN Binary Classifier</footer>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  /* ── elements ── */
+  const dropZone    = document.getElementById('drop-zone');
+  const fileInput   = document.getElementById('file-input');
+  const previewWrap = document.getElementById('preview-wrap');
+  const previewImg  = document.getElementById('preview-img');
+  const previewName = document.getElementById('preview-name');
+  const btnGo       = document.getElementById('btn-go');
+  const progressFill= document.getElementById('progress-fill');
+  const scanningMsg = document.getElementById('scanning-msg');
+  const resultPanel = document.getElementById('result');
+  const toast       = document.getElementById('toast');
+  let   selected    = null;
+
+  /* ── file selection ── */
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('over');
+    handleFile(e.dataTransfer.files[0]);
+  });
+
+  function handleFile(file) {
+    if (!file) return;
+    const allowed = ['image/png','image/jpeg','image/webp','image/bmp','image/jpg'];
+    if (!allowed.includes(file.type)) { showToast('Unsupported file type. Use PNG / JPG / WEBP / BMP.'); return; }
+    if (file.size > 8 * 1024 * 1024)  { showToast('File too large — 8 MB max.'); return; }
+
+    selected = file;
+    previewImg.src = URL.createObjectURL(file);
+    previewName.textContent = file.name;
+    previewWrap.classList.add('show');
+    btnGo.classList.add('show');
+    resultPanel.classList.remove('show');
+  }
+
+  /* ── predict ── */
+  btnGo.addEventListener('click', async () => {
+    if (!selected) return;
+    setLoading(true);
+
+    const fd = new FormData();
+    fd.append('file', selected);
+
+    try {
+      const res  = await fetch('/predict', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || data.error) { showToast(data.error || 'Server error.'); return; }
+      renderResult(data);
+    } catch {
+      showToast('Network error — is the server running?');
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  function setLoading(on) {
+    progressFill.classList.toggle('running', on);
+    scanningMsg.classList.toggle('show', on);
+    btnGo.disabled    = on;
+    btnGo.textContent = on ? 'Analysing…' : 'Detect Brand';
+  }
+
+  /* ── render result ── */
+  function renderResult(data) {
+    const unrelated = data.unrelated;
+    const isNike    = data.brand === 'NIKE';
+    const cls       = unrelated ? 'unrelated' : (isNike ? 'nike' : 'adidas');
+    const icon      = unrelated ? '?' : (isNike ? '✓' : '≋');
+    const brandText = unrelated ? 'UNKNOWN' : data.brand;
+
+    /* verdict banner */
+    const verdict = document.getElementById('verdict');
+    verdict.className = `verdict ${cls}`;
+    document.getElementById('v-logo').textContent  = icon;
+    document.getElementById('v-brand').textContent = brandText;
+    document.getElementById('v-brand').className   = `v-brand`;   // reset, colour via .verdict.X
+
+    /* unrelated warning banner */
+    const unrelBanner = document.getElementById('unrelated-banner');
+    unrelBanner.classList.toggle('show', unrelated);
+
+    /* hide score boxes when unrelated */
+    document.querySelector('.scores').style.display   = unrelated ? 'none' : 'grid';
+    document.querySelector('.conf-block').style.opacity = unrelated ? '0.4' : '1';
+
+    /* uploaded image */
+    const resImgWrap = document.getElementById('res-img-wrap');
+    document.getElementById('res-img').src = data.image_url;
+    resImgWrap.style.display = 'block';
+
+    /* confidence bar */
+    const confPct = document.getElementById('conf-pct');
+    confPct.className = `conf-pct ${cls}`;
+    const barFg = document.getElementById('bar-fg');
+    barFg.className = `bar-fg ${cls}`;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      barFg.style.width = data.confidence + '%';
+    }));
+    tickUp(confPct, 0, data.confidence, '%', 1000);
+
+    /* split scores */
+    if (!unrelated) {
+      document.getElementById('nike-val').textContent   = data.nike_pct.toFixed(1) + '%';
+      document.getElementById('adidas-val').textContent = data.adidas_pct.toFixed(1) + '%';
+      document.getElementById('box-nike').className   = 'score-box' + (isNike  ? ' active-nike'   : '');
+      document.getElementById('box-adidas').className = 'score-box' + (!isNike ? ' active-adidas' : '');
+    }
+
+    /* reveal */
+    resultPanel.classList.add('show');
+    setTimeout(() => resultPanel.scrollIntoView({ behavior:'smooth', block:'nearest' }), 100);
+  }
+
+  /* ── animated counter ── */
+  function tickUp(el, from, to, suffix, dur) {
+    const start = performance.now();
+    (function step(now) {
+      const t   = Math.min((now - start) / dur, 1);
+      const val = from + (to - from) * easeOut(t);
+      el.textContent = val.toFixed(1) + suffix;
+      if (t < 1) requestAnimationFrame(step);
+    })(performance.now());
+  }
+  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+  /* ── reset ── */
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    selected = null;
+    fileInput.value = '';
+    previewImg.src  = '';
+    previewWrap.classList.remove('show');
+    btnGo.classList.remove('show');
+    resultPanel.classList.remove('show');
+    document.getElementById('bar-fg').style.width = '0%';
+    document.getElementById('res-img-wrap').style.display = 'none';
+    document.getElementById('unrelated-banner').classList.remove('show');
+    document.querySelector('.scores').style.display = 'grid';
+    document.querySelector('.conf-block').style.opacity = '1';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  /* ── toast ── */
+  let toastTimer;
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 4000);
+  }
+</script>
+</body>
+</html>
